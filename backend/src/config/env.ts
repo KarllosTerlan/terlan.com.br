@@ -24,10 +24,10 @@ const schema = z.object({
   EVOLUTION_API_KEY: z.string().min(1),
   EVOLUTION_WEBHOOK_TOKEN: z.string().min(1),
 
-  // WhatsApp Cloud API (Meta — fallback)
-  WHATSAPP_TOKEN: z.string().min(1),
-  WHATSAPP_PHONE_NUMBER_ID: z.string().min(1),
-  WHATSAPP_VERIFY_TOKEN: z.string().min(1),
+  // WhatsApp Cloud API (Meta — fallback, optional)
+  WHATSAPP_TOKEN: z.string().default('PUT_YOUR_WHATSAPP_TOKEN_HERE'),
+  WHATSAPP_PHONE_NUMBER_ID: z.string().default(''),
+  WHATSAPP_VERIFY_TOKEN: z.string().default('clinic-bot-verify'),
   WHATSAPP_BUSINESS_ACCOUNT_ID: z.string().optional(),
   WHATSAPP_API_VERSION: z.string().default('v19.0'),
 
