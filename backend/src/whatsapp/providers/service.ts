@@ -1,7 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
 import { AppError } from '../../lib/errors.js';
-import type { WhatsAppProvider, ProviderName } from './types.js';
+import type { WhatsAppProvider, ProviderName, SendResult } from './types.js';
 import { EvolutionProvider } from './evolution.js';
 import { MetaProvider } from './meta.js';
 
@@ -94,7 +94,7 @@ export async function sendText(clinicId: string, to: string, text: string): Prom
       continue;
     }
 
-    const result = await p.sendMessage(clinicId, to, text).catch((err) => ({ ok: false, error: err?.message ?? 'threw' }));
+    const result = await p.sendMessage(clinicId, to, text).catch((err): SendResult => ({ ok: false, error: err?.message ?? 'threw' }));
     await logAttempt({
       clinicId,
       provider: p.getName(),
