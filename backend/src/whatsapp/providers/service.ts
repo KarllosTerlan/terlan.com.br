@@ -116,7 +116,7 @@ export async function sendText(clinicId: string, to: string, text: string): Prom
     logger.error({ clinicId, provider: p.getName(), error: lastError }, 'Provider sendMessage failed, will try fallback');
   }
 
-  throw new AppError(`All WhatsApp providers failed: ${lastError}`, 502);
+  throw new AppError(502, `All WhatsApp providers failed: ${lastError}`);
 }
 
 /** Returns the currently-active provider name (first one in chain that reports connected). */

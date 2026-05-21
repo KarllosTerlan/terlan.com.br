@@ -178,7 +178,7 @@ export async function whatsappRoutes(app: FastifyInstance) {
     const existing = await prisma.clinic.findFirst({
       where: { whatsappPhoneNumberId: body.whatsappPhoneNumberId, NOT: { id: req.auth!.clinicId } },
     });
-    if (existing) throw new AppError('Phone number already in use by another clinic', 409);
+    if (existing) throw new AppError(409, 'Phone number already in use by another clinic');
 
     const info = await fetchPhoneNumberInfo(body.whatsappPhoneNumberId);
     const updated = await prisma.clinic.update({
