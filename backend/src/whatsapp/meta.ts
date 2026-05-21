@@ -51,8 +51,8 @@ export async function sendTextMessage(
   if (!resp.ok) {
     logger.error({ status: resp.status, data, toPhone }, 'WhatsApp send failed');
     throw new AppError(
-      `WhatsApp send failed (${resp.status}): ${data?.error?.message ?? 'unknown'}`,
       502,
+      `WhatsApp send failed (${resp.status}): ${data?.error?.message ?? 'unknown'}`,
     );
   }
   return { wamId: data?.messages?.[0]?.id };
