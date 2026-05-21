@@ -44,7 +44,7 @@ export default function WhatsAppSetup() {
   const qr = useQuery<QrResp>({
     queryKey: ['wa-evolution-qr'],
     queryFn: async () => (await api.get('/whatsapp/evolution/qr')).data,
-    refetchInterval: (data) => (data?.state === 'open' ? 15000 : 4000),
+    refetchInterval: (query) => (query.state.data?.state === 'open' ? 15000 : 4000),
     enabled: Boolean(status.data?.evolution.configured),
   });
 
