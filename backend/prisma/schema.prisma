@@ -1,0 +1,167 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Plan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum UserRole {
+  ADMIN
+  STAFF
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+model Clinic {
+  id                   String   @id @default(uuid())
+  name                 String
+  phone                String?
+  email                String?
+  plan                 Plan     @default(FREE)
+  active               Boolean  @default(true)
+
+  // Google Calendar
+  googleCalendarId     String?
+  googleRefreshToken   String?
+
+  // Business config
+  timezone             String   @default("America/Sao_Paulo")
+  businessHours        Json     @default("{\"mon\":[\"08:00\",\"18:00\"],\"tue\":[\"08:00\",\"18:00\"],\"wed\":[\"08:00\",\"18:00\"],\"thu\":[\"08:00\",\"18:00\"],\"fri\":[\"08:00\",\"18:00\"],\"sat\":null,\"sun\":null}")
+  welcomeMessage       String   @default("Olá! Sou a recepcionista virtual. Como posso ajudar?")
+  offHoursMessage      String   @default("No momento estamos fora do horário de atendimento. Retornaremos em breve.")
+
+  // WhatsApp providers — primary: Evolution (self-hosted), fallback: Meta Cloud API
+  whatsappEvolutionInstance String? @unique     // instance name in Evolution API
+  whatsappPhoneNumberId     String? @unique     // Meta Cloud API phone_number_id
+  whatsappDisplayNumber     String?             // human readable number (from either provider)
+  whatsappPreferredProvider String  @default("evolution") // "evolution" | "meta"
+
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  professionals        Professional[]
+  appointments         Appointment[]
+  conversations        Conversation[]
+  users                User[]
+  messageLogs          MessageLog[]
+
+  @@index([active])
+}
+
+model Professional {
+  id              String   @id @default(uuid())
+  clinicId        String
+  name            String
+  specialty       String?
+  whatsappNumber  String?
+  calendarId      String?  // separate Google calendar per professional (optional)
+  defaultDuration Int      @default(30) // minutes
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  clinic       Clinic        @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@index([clinicId, active])
+}
+
+model Client {
+  id        String   @id @default(uuid())
+  phone     String   @unique
+  name      String?
+  email     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointments  Appointment[]
+}
+
+model Appointment {
+  id             String            @id @default(uuid())
+  clinicId       String
+  professionalId String
+  clientId       String
+  googleEventId  String?
+  dateTime       DateTime
+  duration       Int               @default(30) // minutes
+  status         AppointmentStatus @default(PENDING)
+  notes          String?
+  reminderSent   Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  clinic       Clinic       @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  professional Professional @relation(fields: [professionalId], references: [id])
+  client       Client       @relation(fields: [clientId], references: [id])
+
+  @@index([clinicId, dateTime])
+  @@index([clinicId, status])
+  @@index([professionalId, dateTime])
+}
+
+model Conversation {
+  id            String   @id @default(uuid())
+  clinicId      String
+  clientPhone   String
+  messages      Json     @default("[]") // [{role, content, ts}]
+  context       Json     @default("{}") // { lastIntent, pendingBooking, ... }
+  lastMessageAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicId, clientPhone])
+  @@index([clinicId, lastMessageAt])
+}
+
+model User {
+  id           String   @id @default(uuid())
+  clinicId     String
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole @default(ADMIN)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@index([clinicId])
+}
+
+/// Audit log of every outbound WhatsApp message attempt: which provider was used and whether it succeeded.
+model MessageLog {
+  id         String   @id @default(uuid())
+  clinicId   String
+  direction  String   // "out" | "in"
+  provider   String   // "evolution" | "meta"
+  toPhone    String?
+  fromPhone  String?
+  text       String
+  externalId String?  // wamId (meta) or key.id (evolution)
+  ok         Boolean  @default(true)
+  error      String?
+  fallback   Boolean  @default(false) // true if Meta was used because Evolution failed
+  createdAt  DateTime @default(now())
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@index([clinicId, createdAt])
+  @@index([clinicId, provider])
+}
