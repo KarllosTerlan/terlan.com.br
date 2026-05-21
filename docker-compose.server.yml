@@ -70,10 +70,17 @@ services:
       CONFIG_SESSION_PHONE_CLIENT: Clinic Bot
       CONFIG_SESSION_PHONE_NAME: Chrome
       QRCODE_LIMIT: 30
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.terlan-evolution.rule=Host(`evolution.terlan.com.br`)"
+      - "traefik.http.routers.terlan-evolution.entrypoints=websecure"
+      - "traefik.http.routers.terlan-evolution.tls.certresolver=letsencrypt"
+      - "traefik.http.services.terlan-evolution.loadbalancer.server.port=8080"
     volumes:
       - evolution_instances:/evolution/instances
       - evolution_store:/evolution/store
     networks:
+      - web
       - internal
 
   backend:
