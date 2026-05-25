@@ -91,9 +91,10 @@ export async function syncAppointmentToGoogle(
   if (!appt || !appt.clinic.googleRefreshToken) return;
 
   const duration = appt.service?.durationMinutes ?? 30;
-  const summary = `${appt.patientName} — ${appt.service?.name ?? 'Consulta'}`;
+  const summary = `${appt.client?.name ?? 'Paciente'} — ${appt.service?.name ?? 'Consulta'}`;
   const description = appt.client?.email
-    ? `Paciente: ${appt.patientName}\nTelefone: ${appt.patientPhone}`
+    ? `Paciente: ${appt.client?.name ?? ''}
+Telefone: ${appt.client?.phone ?? ''}`
     : undefined;
 
   // If already has an event, delete it first
@@ -106,7 +107,7 @@ export async function syncAppointmentToGoogle(
   const eventId = await createGoogleEvent(appt.clinic, appt.professional, {
     summary,
     description,
-    dateTime: appt.scheduledAt,
+    dateTime: appt.dateTime,
     duration,
     attendeeEmail: appt.client?.email ?? undefined,
   });
