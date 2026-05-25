@@ -1,32 +1,4 @@
 services:
-  traefik:
-    image: traefik:v3.0
-    container_name: clinic-traefik
-    restart: unless-stopped
-    command:
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--providers.docker.network=clinic-network"
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
-      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
-      - "--entrypoints.websecure.address=:443"
-      - "--certificatesresolvers.le.acme.email=${ACME_EMAIL}"
-      - "--certificatesresolvers.le.acme.storage=/acme/acme.json"
-      - "--certificatesresolvers.le.acme.httpchallenge=true"
-      - "--certificatesresolvers.le.acme.httpchallenge.entrypoint=web"
-      - "--log.level=INFO"
-      - "--accesslog=true"
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./traefik/acme.json:/acme/acme.json
-      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
-    networks:
-      - clinic-network
-
   postgres:
     image: postgres:16-alpine
     container_name: clinic-postgres
@@ -144,13 +116,15 @@ services:
       - backups:/app/backups
     networks:
       - clinic-network
+      - web
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.backend.rule=Host(`api.${DOMAIN}`)"
       - "traefik.http.routers.backend.entrypoints=websecure"
       - "traefik.http.routers.backend.tls=true"
-      - "traefik.http.routers.backend.tls.certresolver=le"
+      - "traefik.http.routers.backend.tls.certresolver=letsencrypt"
       - "traefik.http.services.backend.loadbalancer.server.port=3000"
+      - "traefik.docker.network=web"
 
   dashboard:
     build:
@@ -164,13 +138,15 @@ services:
       NEXT_PUBLIC_API_URL: https://api.${DOMAIN}
     networks:
       - clinic-network
+      - web
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.dashboard.rule=Host(`app.${DOMAIN}`)"
       - "traefik.http.routers.dashboard.entrypoints=websecure"
       - "traefik.http.routers.dashboard.tls=true"
-      - "traefik.http.routers.dashboard.tls.certresolver=le"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
       - "traefik.http.services.dashboard.loadbalancer.server.port=3001"
+      - "traefik.docker.network=web"
 
   cron:
     image: curlimages/curl:latest
@@ -198,4 +174,6 @@ volumes:
 networks:
   clinic-network:
     name: clinic-network
+  web:
+    external: true
     driver: bridge
