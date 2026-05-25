@@ -1,19 +1,46 @@
 'use client';
 
 import { useState } from 'react';
-import { useAuth } from '@/lib/auth';
+import { useAuth, useRegister } from '@/lib/auth';
 import { Bot, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
-  const { login, loading, error } = useAuth();
+  const { login, loading: loginLoading, error: loginError } = useAuth();
+  const { register, loading: registerLoading, error: registerError } = useRegister();
+
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+
+  // Login fields
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Register fields
+  const [clinicName, setClinicName] = useState('');
+  const [adminName, setAdminName] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [showRegPassword, setShowRegPassword] = useState(false);
+  const [phone, setPhone] = useState('');
+
+  const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     login(email, password);
   };
+
+  const handleRegisterSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    register({
+      clinicName,
+      adminName,
+      email: regEmail,
+      password: regPassword,
+      phone: phone || undefined,
+    });
+  };
+
+  const loading = mode === 'login' ? loginLoading : registerLoading;
+  const error = mode === 'login' ? loginError : registerError;
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
@@ -39,67 +66,184 @@ export default function LoginPage() {
         {/* Card */}
         <div className="card">
           <div className="card-header text-center">
-            <h1 className="font-semibold text-white">Entrar no painel</h1>
-            <p className="text-xs text-muted mt-1">Acesse com suas credenciais</p>
+            <h1 className="font-semibold text-white">
+              {mode === 'login' ? 'Entrar no painel' : 'Cadastrar nova clínica'}
+            </h1>
+            <p className="text-xs text-muted mt-1">
+              {mode === 'login' ? 'Acesse com suas credenciais' : 'Crie sua conta e comece a usar'}
+            </p>
           </div>
           <div className="card-body">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <label className="space-y-1.5 block">
-                <span className="text-xs text-muted font-medium">Email</span>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="input"
-                  placeholder="seu@email.com"
-                  required
-                  autoComplete="email"
-                />
-              </label>
-
-              <label className="space-y-1.5 block">
-                <span className="text-xs text-muted font-medium">Senha</span>
-                <div className="relative">
+            {mode === 'login' ? (
+              <form onSubmit={handleLoginSubmit} className="space-y-4">
+                <label className="space-y-1.5 block">
+                  <span className="text-xs text-muted font-medium">Email</span>
                   <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="input pr-10"
-                    placeholder="••••••••"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="input"
+                    placeholder="seu@email.com"
                     required
-                    autoComplete="current-password"
+                    autoComplete="email"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-white"
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-              </label>
+                </label>
 
-              {error && (
-                <div className="rounded-xl bg-danger/10 border border-danger/20 px-4 py-3">
-                  <p className="text-sm text-danger">{error}</p>
-                </div>
-              )}
+                <label className="space-y-1.5 block">
+                  <span className="text-xs text-muted font-medium">Senha</span>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="input pr-10"
+                      placeholder="••••••••"
+                      required
+                      autoComplete="current-password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-white"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </label>
 
-              <button
-                type="submit"
-                disabled={loading || !email || !password}
-                className="btn-primary w-full"
-              >
-                {loading ? (
-                  <span className="flex items-center gap-2 justify-center">
-                    <span className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
-                    Entrando...
-                  </span>
-                ) : (
-                  'Entrar'
+                {error && (
+                  <div className="rounded-xl bg-danger/10 border border-danger/20 px-4 py-3">
+                    <p className="text-sm text-danger">{error}</p>
+                  </div>
                 )}
-              </button>
-            </form>
+
+                <button
+                  type="submit"
+                  disabled={loading || !email || !password}
+                  className="btn-primary w-full"
+                >
+                  {loading ? (
+                    <span className="flex items-center gap-2 justify-center">
+                      <span className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                      Entrando...
+                    </span>
+                  ) : (
+                    'Entrar'
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setMode('register')}
+                  className="w-full text-xs text-muted hover:text-white transition-colors py-1"
+                >
+                  Cadastrar nova clínica
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleRegisterSubmit} className="space-y-4">
+                <label className="space-y-1.5 block">
+                  <span className="text-xs text-muted font-medium">Nome da clínica *</span>
+                  <input
+                    type="text"
+                    value={clinicName}
+                    onChange={(e) => setClinicName(e.target.value)}
+                    className="input"
+                    placeholder="Ex: Clínica São Lucas"
+                    required
+                  />
+                </label>
+
+                <label className="space-y-1.5 block">
+                  <span className="text-xs text-muted font-medium">Seu nome *</span>
+                  <input
+                    type="text"
+                    value={adminName}
+                    onChange={(e) => setAdminName(e.target.value)}
+                    className="input"
+                    placeholder="Ex: Dr. João Silva"
+                    required
+                  />
+                </label>
+
+                <label className="space-y-1.5 block">
+                  <span className="text-xs text-muted font-medium">Email *</span>
+                  <input
+                    type="email"
+                    value={regEmail}
+                    onChange={(e) => setRegEmail(e.target.value)}
+                    className="input"
+                    placeholder="seu@email.com"
+                    required
+                    autoComplete="email"
+                  />
+                </label>
+
+                <label className="space-y-1.5 block">
+                  <span className="text-xs text-muted font-medium">Senha * (mín. 8 caracteres)</span>
+                  <div className="relative">
+                    <input
+                      type={showRegPassword ? 'text' : 'password'}
+                      value={regPassword}
+                      onChange={(e) => setRegPassword(e.target.value)}
+                      className="input pr-10"
+                      placeholder="••••••••"
+                      required
+                      minLength={8}
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowRegPassword(!showRegPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-white"
+                    >
+                      {showRegPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </label>
+
+                <label className="space-y-1.5 block">
+                  <span className="text-xs text-muted font-medium">Telefone da clínica</span>
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="input"
+                    placeholder="+55 11 99999-9999"
+                    autoComplete="tel"
+                  />
+                </label>
+
+                {error && (
+                  <div className="rounded-xl bg-danger/10 border border-danger/20 px-4 py-3">
+                    <p className="text-sm text-danger">{error}</p>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading || !clinicName || !adminName || !regEmail || !regPassword}
+                  className="btn-primary w-full"
+                >
+                  {loading ? (
+                    <span className="flex items-center gap-2 justify-center">
+                      <span className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                      Cadastrando...
+                    </span>
+                  ) : (
+                    'Cadastrar clínica'
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setMode('login')}
+                  className="w-full text-xs text-muted hover:text-white transition-colors py-1"
+                >
+                  Já tenho conta — Entrar
+                </button>
+              </form>
+            )}
           </div>
         </div>
 
@@ -110,3 +254,4 @@ export default function LoginPage() {
     </div>
   );
 }
+

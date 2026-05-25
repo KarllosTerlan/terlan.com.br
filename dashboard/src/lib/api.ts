@@ -65,6 +65,11 @@ export const api = {
       '/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) },
     ),
 
+  registerClinic: (data: { clinicName: string; adminName: string; email: string; password: string; phone?: string }) =>
+    request<{ token: string; user: { id: string; name: string; email: string; role: string; clinic: Clinic } }>(
+      '/auth/register-clinic', { method: 'POST', body: JSON.stringify(data) },
+    ),
+
   // ── Dashboard ──
   getDashboard: () => request<{
     totalAppointments: number;
