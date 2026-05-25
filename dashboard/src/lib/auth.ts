@@ -67,7 +67,7 @@ export function useRegister() {
   return { register, loading, error };
 }
 
-
+export function useClinic(): Clinic | null {
   const [clinic, setClinic] = useState<Clinic | null>(null);
   useEffect(() => {
     try {
