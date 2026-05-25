@@ -1,21 +1,23 @@
 # Clinic Bot
 
-Sistema multi-tenant de agendamento inteligente para clínicas, com atendimento automático via WhatsApp e IA (Anthropic Claude), integração com Google Calendar e painel administrativo em React.
+Sistema multi-tenant de agendamento inteligente para clínicas, com atendimento automático via WhatsApp e IA (Claude), integração com Google Calendar e painel administrativo Next.js.
 
-**Stack:** Node.js 20 + TypeScript + Fastify + Prisma + PostgreSQL 16 + Redis + BullMQ + Evolution API (self-hosted, primário) + WhatsApp Cloud API / Meta (fallback oficial) + Claude + Google Calendar + React 18 + Vite + TailwindCSS + Docker + Traefik v3.
+**Stack:** Node.js 20 + TypeScript + Fastify + Prisma + PostgreSQL 16 + Redis + BullMQ + Evolution API (self-hosted, primário) + WhatsApp Cloud API / Meta (fallback) + Anthropic Claude + Google Calendar + **Next.js 15** + TailwindCSS + Docker + Traefik v3.
 
 ---
 
 ## Sumário
 
 - [Pré-requisitos](#pré-requisitos)
+- [Configurar Claude API](#configurar-claude-api-anthropic)
 - [Configurar Google Calendar API](#configurar-google-calendar-api)
-- [Configurar Claude API (Anthropic)](#configurar-claude-api-anthropic)
 - [Rodar localmente (dev)](#rodar-localmente-dev)
-- [Deploy na Hetzner (produção)](#deploy-na-hetzner-produção)
-- [Conectar o WhatsApp (Meta Cloud API)](#conectar-o-whatsapp-meta-cloud-api)
+- [Deploy em produção (Hetzner)](#deploy-em-produção-hetzner)
+- [Como atualizar o sistema](#como-atualizar-o-sistema)
+- [Conectar o WhatsApp](#conectar-o-whatsapp)
 - [Adicionar uma nova clínica](#adicionar-uma-nova-clínica)
 - [Estrutura do projeto](#estrutura-do-projeto)
+- [Variáveis de ambiente](#variáveis-de-ambiente)
 - [Troubleshooting](#troubleshooting)
 - [Sobre o WhatsApp Cloud API](#sobre-o-whatsapp-cloud-api)
 
@@ -23,51 +25,61 @@ Sistema multi-tenant de agendamento inteligente para clínicas, com atendimento 
 
 ## Pré-requisitos
 
-- Docker 24+ e Docker Compose v2
-- (Local opcional) Node.js 20+ se quiser rodar fora de container
-- Conta Google Cloud (para OAuth do Google Calendar)
-- Chave da API Anthropic (https://console.anthropic.com)
-- Domínio próprio (apenas para produção) com DNS apontando para o servidor
+- **Docker 24+** e **Docker Compose v2** (obrigatório)
+- Node.js 20+ apenas se quiser rodar backend/dashboard fora de container
+- Chave da API Anthropic → https://console.anthropic.com
+- Conta Google Cloud (para OAuth do Google Calendar — opcional)
+- Domínio próprio com DNS apontando para o servidor (apenas produção)
 
----
-
-## Configurar Google Calendar API
-
-1. Acesse https://console.cloud.google.com e crie um projeto (ou use um existente).
-2. **APIs & Services → Library** → habilite **Google Calendar API**.
-3. **APIs & Services → OAuth consent screen**:
-   - User Type: **External**.
-   - Preencha nome do app, e-mail de suporte, e domínio autorizado.
-   - Em **Scopes**, adicione `https://www.googleapis.com/auth/calendar`.
-   - Publique o app (deixe em "Testing" enquanto não publicado, mas adicione e-mails de teste — caso contrário o refresh token expira em 7 dias).
-4. **APIs & Services → Credentials → Create Credentials → OAuth client ID**:
-   - Application type: **Web application**.
-   - Authorized redirect URIs:
-     - Produção: `https://api.SEU-DOMINIO.com/google/callback`
-     - Dev local: `http://localhost:3000/google/callback`
-5. Copie `Client ID` e `Client Secret` para o `.env`:
-   ```
-   GOOGLE_CLIENT_ID=...
-   GOOGLE_CLIENT_SECRET=...
-   GOOGLE_REDIRECT_URI=https://api.SEU-DOMINIO.com/google/callback
-   ```
-
-> O fluxo de autorização por clínica é feito pelo painel: **Configurações → Integrações → Conectar Google**.
+> **Verificar versões instaladas:**
+> ```bash
+> docker --version          # precisa ser 24+
+> docker compose version    # precisa ser v2 (comando sem hífen)
+> ```
 
 ---
 
 ## Configurar Claude API (Anthropic)
 
-1. Crie uma conta em https://console.anthropic.com.
-2. Em **API Keys**, gere uma chave (`sk-ant-...`).
-3. No `.env`:
-   ```
+1. Crie conta em https://console.anthropic.com → **API Keys** → gere uma chave (`sk-ant-...`).
+2. No `.env`:
+   ```env
    ANTHROPIC_API_KEY=sk-ant-...
-   CLAUDE_MODEL=claude-sonnet-4-5     # opções: claude-haiku-4-5 | claude-sonnet-4-5 | claude-opus-4-5-20250929
+   CLAUDE_MODEL=claude-sonnet-4-5
    CLAUDE_MAX_TOKENS=1024
    ```
 
-**Recomendação:** `claude-sonnet-4-5` oferece o melhor custo-benefício para o caso de uso de recepcionista. Use `claude-haiku-4-5` se o volume for muito alto.
+| Modelo | Velocidade | Custo | Recomendado para |
+|--------|-----------|-------|------------------|
+| `claude-haiku-4-5` | Mais rápido | Mais barato | Alto volume de mensagens |
+| `claude-sonnet-4-5` | Médio | Médio | **Uso geral (padrão)** |
+| `claude-opus-4-5-20250929` | Mais lento | Mais caro | Casos complexos |
+
+> **Atenção:** Se a IA não estiver respondendo, verifique a chave no `.env` do servidor. O placeholder padrão é `PREENCHA_SUA_CHAVE_sk-ant-...` — precisa ser substituído por uma chave real.
+
+---
+
+## Configurar Google Calendar API
+
+> Esta integração é **opcional**. O sistema funciona normalmente sem ela.
+
+1. Acesse https://console.cloud.google.com → crie ou selecione um projeto.
+2. **APIs & Services → Library** → habilite **Google Calendar API**.
+3. **APIs & Services → OAuth consent screen**:
+   - User Type: **External**
+   - Adicione o scope `https://www.googleapis.com/auth/calendar`
+   - **Importante:** Publique o app (não deixe em "Testing" em produção — refresh tokens expiram em 7 dias no modo Testing)
+4. **Credentials → Create OAuth client ID** → Web application:
+   - Redirect URI produção: `https://api.SEU-DOMINIO.com/google/callback`
+   - Redirect URI local: `http://localhost:3000/google/callback`
+5. No `.env`:
+   ```env
+   GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com
+   GOOGLE_CLIENT_SECRET=GOCSPX-xxxx
+   GOOGLE_REDIRECT_URI=https://api.SEU-DOMINIO.com/google/callback
+   ```
+
+> Após o deploy, conecte cada clínica individualmente pelo painel: **Configurações → Integrações → Conectar Google**.
 
 ---
 
@@ -75,71 +87,108 @@ Sistema multi-tenant de agendamento inteligente para clínicas, com atendimento 
 
 ```bash
 cp .env.example .env
-# edite .env com as chaves Anthropic e Google
+# edite .env com pelo menos: ANTHROPIC_API_KEY
 
 docker compose -f docker-compose.dev.yml up -d
 ```
 
-Serviços expostos:
+Serviços disponíveis após subir:
 
-- API: http://localhost:3000
-- Frontend: http://localhost:5173
-- PostgreSQL: localhost:5432 (user/pass do .env)
-- Redis: localhost:6379
+| Serviço | URL | Container |
+|---------|-----|----------|
+| API (backend) | http://localhost:3000 | `clinic-backend-dev` |
+| Dashboard (Next.js) | http://localhost:3001 | `clinic-dashboard-dev` |
+| PostgreSQL | localhost:**5434** | `clinic-postgres-dev` |
+| Redis | localhost:**6380** | `clinic-redis-dev` |
+| Evolution API | http://localhost:8080 | `clinic-evolution-dev` |
 
-Para acompanhar logs:
+> **Atenção às portas:** Em dev, PostgreSQL roda na **5434** e Redis na **6380** para não conflitar com instalações locais.
+
+**Comandos úteis:**
 
 ```bash
+# Ver logs em tempo real
 docker compose -f docker-compose.dev.yml logs -f backend
-```
+docker compose -f docker-compose.dev.yml logs -f dashboard
 
-Para acessar o banco:
+# Reiniciar só o backend após mudança de código
+docker compose -f docker-compose.dev.yml restart backend
 
-```bash
+# Acessar o banco de dados
 docker exec -it clinic-postgres-dev psql -U clinic -d clinic_bot
+
+# Parar tudo
+docker compose -f docker-compose.dev.yml down
 ```
 
 ---
 
-## Deploy na Hetzner (produção)
+## Deploy em produção (Hetzner)
 
 ### 1. Provisione o servidor
 
-- Crie uma VPS Ubuntu 22.04+ (CX21 ou superior recomendado).
-- Aponte o DNS A dos subdomínios para o IP do servidor:
-  - `api.SEU-DOMINIO.com → IP`
-  - `app.SEU-DOMINIO.com → IP`
+- VPS Ubuntu 22.04+ (mínimo CX21: 2 vCPU, 4 GB RAM)
+- Aponte 2 registros DNS tipo A para o IP do servidor:
+  ```
+  api.SEU-DOMINIO.com  →  IP-DO-SERVIDOR
+  app.SEU-DOMINIO.com  →  IP-DO-SERVIDOR
+  ```
+  > Aguarde a propagação antes de fazer o deploy (pode levar até 1h). Verifique com: `dig api.SEU-DOMINIO.com`
 
-### 2. Instale Docker
+### 2. Instale Docker no servidor
 
 ```bash
 curl -fsSL https://get.docker.com | sh
 sudo usermod -aG docker $USER
+newgrp docker   # aplica o grupo sem precisar sair da sessão
 ```
 
 ### 3. Clone o projeto
 
 ```bash
-git clone <seu-repo> clinic-bot
-cd clinic-bot
+git clone https://github.com/SEU-USUARIO/SEU-REPO.git /opt/terlan
+cd /opt/terlan
 ```
 
-### 4. Configure variáveis
+### 4. Configure as variáveis de ambiente
 
 ```bash
 cp .env.example .env
 nano .env
 ```
 
-Preencha **obrigatoriamente**:
+Variáveis **obrigatórias** para o sistema funcionar:
 
-- `DOMAIN` (ex.: `clinica.com`)
-- `ACME_EMAIL`
-- `JWT_SECRET` (gere uma string longa: `openssl rand -hex 32`)
-- `POSTGRES_PASSWORD`
-- `ANTHROPIC_API_KEY`
-- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`
-- `FRONTEND_URL`, `VITE_API_URL`
+```env
+DOMAIN=seu-dominio.com
+ACME_EMAIL=seu@email.com
+
+JWT_SECRET=         # gere com: openssl rand -hex 32
+POSTGRES_PASSWORD=  # qualquer senha forte
+CRON_SECRET=        # gere com: openssl rand -hex 16
+
+ANTHROPIC_API_KEY=sk-ant-...   # chave real da Anthropic
+
+EVOLUTION_API_KEY=             # string aleatória longa
+EVOLUTION_WEBHOOK_TOKEN=       # mesma string acima
+
+FRONTEND_URL=https://app.seu-dominio.com
+PUBLIC_API_URL=https://api.seu-dominio.com
+```
+
+Variáveis **opcionais** (Google Calendar e WhatsApp Meta):
+
+```env
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URI=https://api.seu-dominio.com/google/callback
+
+WHATSAPP_TOKEN=
+WHATSAPP_PHONE_NUMBER_ID=
+WHATSAPP_VERIFY_TOKEN=
+```
+
+> **Não altere** `DATABASE_URL`, `REDIS_URL` e `EVOLUTION_API_URL` — eles já apontam para os serviços internos do Docker pela rede `clinic-network`.
 
 ### 5. Prepare o Traefik
 
@@ -147,115 +196,133 @@ Preencha **obrigatoriamente**:
 chmod 600 traefik/acme.json
 ```
 
-### 6. Suba os serviços
+> Se esse arquivo não existir: `touch traefik/acme.json && chmod 600 traefik/acme.json`
+
+### 6. Suba todos os serviços
 
 ```bash
 docker compose up -d
 ```
 
-O Traefik solicita os certificados Let's Encrypt automaticamente. Aguarde 1-2 min na primeira subida.
+O Traefik emite os certificados SSL automaticamente via Let's Encrypt. Na primeira subida aguarde **1-2 minutos** antes de acessar o HTTPS.
 
-### 7. Verifique
+### 7. Verifique se está tudo rodando
 
 ```bash
+# Status de todos os containers (todos devem estar Up ou healthy)
 docker compose ps
-docker compose logs -f backend
+
+# Testar a API
 curl https://api.SEU-DOMINIO.com/health
+# esperado: {"ok":true}
+
+# Ver logs do backend em tempo real
+docker compose logs -f backend
 ```
+
+Containers que devem estar rodando:
+
+| Container | Descrição |
+|-----------|-----------|
+| `clinic-postgres` | Banco de dados (deve estar `healthy`) |
+| `clinic-redis` | Cache e filas (deve estar `healthy`) |
+| `clinic-evolution` | WhatsApp via QR Code |
+| `clinic-backend` | API Fastify (porta 3000) |
+| `clinic-dashboard` | Painel Next.js (porta 3001) |
+| `clinic-cron` | Cron de lembretes (roda a cada 5 min) |
 
 Acesse `https://app.SEU-DOMINIO.com` e clique em **Cadastrar nova clínica**.
 
 ---
 
-## Conectar o WhatsApp (Meta Cloud API)
+## Como atualizar o sistema
 
-O projeto suporta **dois providers** de WhatsApp em paralelo, com **fallback automático**:
+Sempre que fizer mudanças no código e quiser aplicar em produção:
+
+```bash
+# No servidor (SSH)
+cd /opt/terlan
+git pull
+
+# Se mudou o backend:
+docker compose build backend --no-cache
+docker compose up -d backend
+
+# Se mudou o dashboard (Next.js):
+# IMPORTANTE: o dashboard precisa de rebuild completo porque o
+# NEXT_PUBLIC_API_URL é injetado em tempo de build (não runtime).
+docker compose build dashboard --no-cache
+docker compose up -d dashboard
+
+# Se mudou os dois:
+docker compose build backend dashboard --no-cache
+docker compose up -d
+```
+
+> **Por que `--no-cache`?** O Next.js bake a URL da API no bundle durante o build. Se você não usar `--no-cache`, o Docker pode usar uma camada cacheada com a URL antiga.
+
+Ver o log do build:
+```bash
+docker compose build dashboard --no-cache > /tmp/build.log 2>&1
+tail -f /tmp/build.log
+```
+
+---
+
+## Conectar o WhatsApp
+
+O sistema suporta **dois providers** simultâneos com **fallback automático**:
 
 | Provider | Tipo | Uso | Conexão |
 |----------|------|-----|---------|
-| **Evolution API** | self-hosted (baileys) | primário | QR Code (1 instância por clínica) |
-| **Meta Cloud API** | oficial Meta | fallback automático | Phone Number ID + token permanente |
+| **Evolution API** | Self-hosted (baileys) | Primário | QR Code — 1 instância por clínica |
+| **Meta Cloud API** | API oficial da Meta | Fallback automático | Phone Number ID + token permanente |
 
-Quando o backend precisa enviar uma mensagem, ele tenta primeiro a Evolution. Se a instância estiver desconectada **ou** o envio falhar, ele cai automaticamente na Meta. Cada tentativa é registrada na tabela `MessageLog` (`provider`, `ok`, `error`, `fallback`).
+O backend tenta sempre a Evolution primeiro. Se a instância estiver desconectada ou o envio falhar, cai automaticamente na Meta. Cada tentativa é registrada na tabela `MessageLog` com os campos `provider`, `ok`, `error` e `fallback`.
 
-### A) Conectar via Evolution API (recomendado para começar)
+### Opção A — Evolution API via QR Code (mais fácil para começar)
 
-A imagem `atendai/evolution-api:latest` já está incluída no `docker-compose` e roda lado a lado com o backend. Apenas:
+O container já está incluso no `docker-compose`. Basta:
 
-1. Defina `EVOLUTION_API_KEY` no `.env` (qualquer string longa e aleatória).
-2. Suba os containers: `docker compose -f docker-compose.dev.yml up -d`.
-3. No painel (`/whatsapp`), clique em **Criar instância e gerar QR**.
-4. Escaneie o QR no celular: WhatsApp → Configurações → Aparelhos conectados → Conectar um aparelho.
-5. O status muda para **conectado** e o badge no topo mostra `Evolution ✅ ativa`.
+1. Defina no `.env`: `EVOLUTION_API_KEY=qualquer-string-longa`
+2. Suba os containers: `docker compose up -d`
+3. No painel, acesse **WhatsApp → Criar instância e gerar QR**
+4. Escaneie o QR: **WhatsApp → Configurações → Aparelhos conectados → Conectar um aparelho**
+5. Status muda para **conectado** — badge no topo mostra `Evolution ✅ ativa`
 
-> O webhook é configurado automaticamente pelo backend ao criar a instância, apontando para `PUBLIC_API_URL/webhook/evolution`.
+> O webhook é configurado automaticamente pelo backend, apontando para `PUBLIC_API_URL/webhook/evolution`.
 
-### B) Configurar a Meta Cloud API (fallback)
+### Opção B — Meta Cloud API (número oficial, sem QR)
 
-1. Acesse [developers.facebook.com](https://developers.facebook.com/) e faça login com sua conta Facebook Business.
-2. Clique em **My Apps** → **Create App** → selecione **Business** como tipo.
-3. Dê um nome ao app (ex: `Clinic Bot`) e finalize a criação.
-4. No painel do app, adicione o produto **WhatsApp** → **Set up**.
-5. A Meta cria automaticamente uma **WhatsApp Business Account (WABA)** de teste com um número sandbox e um `Phone Number ID`.
+**Passo 1 — Criar app Meta:**
+1. Acesse [developers.facebook.com](https://developers.facebook.com/) → **My Apps → Create App → Business**
+2. Adicione o produto **WhatsApp → Set up**
+3. Copie o **Phone Number ID** e o **token temporário** (24h) em **WhatsApp → API Setup**
 
-### 2. Obter o Phone Number ID e o token temporário
+**Passo 2 — Gerar token permanente (obrigatório para produção):**
+1. [business.facebook.com/settings](https://business.facebook.com/settings/) → **Users → System Users → Add**
+2. Role: Admin → **Assigned Assets**: selecione seu app e WABA (Full Control)
+3. **Generate New Token** → escopos: `whatsapp_business_messaging` + `whatsapp_business_management` → expiração: **Never**
+4. Salve o token em `WHATSAPP_TOKEN` no `.env` (não aparece de novo)
 
-Em **WhatsApp → API Setup** você verá:
+**Passo 3 — Configurar webhook:**
 
-- **Phone Number ID** (ex: `123456789012345`) → vai em `WHATSAPP_PHONE_NUMBER_ID`.
-- **WhatsApp Business Account ID** (opcional) → vai em `WHATSAPP_BUSINESS_ACCOUNT_ID`.
-- **Temporary access token** (24h, só para testes).
+No painel do app, **WhatsApp → Configuration → Webhook → Edit**:
+- **Callback URL:** `https://api.SEU-DOMINIO.com/webhook/meta`
+- **Verify Token:** valor de `WHATSAPP_VERIFY_TOKEN` no `.env` (qualquer string)
+- Clique **Verify and Save** → em **Webhook fields**, inscreva-se em **`messages`**
 
-Para testar agora, adicione seu próprio celular em **Add phone number** (aparecerá logo abaixo dos números recipientes permitidos). Mensagens só podem ser enviadas para números nessa lista enquanto o app estiver em modo dev.
+**Passo 4 — Vincular ao painel:**
+1. Logue em `https://app.SEU-DOMINIO.com`
+2. Vá em **WhatsApp** → card **Meta Cloud API** → cole o **Phone Number ID** → **Vincular**
 
-### 3. Gerar token PERMANENTE (System User)
-
-O token temporário expira em 24h. Para produção use um **System User token**:
-
-1. Vá em [business.facebook.com/settings](https://business.facebook.com/settings/) → **Users → System Users**.
-2. Clique **Add** → crie um System User (role: Admin).
-3. Em **Assigned Assets**, atribua seu App e sua WABA (Full Control).
-4. Clique **Generate New Token** → selecione o app → marque os escopos `whatsapp_business_messaging` e `whatsapp_business_management` → expiração **Never**.
-5. Copie o token e coloque em `WHATSAPP_TOKEN` no `.env` (não aparece de novo).
-
-### 4. Configurar o Webhook
-
-Ainda no painel do app, **WhatsApp → Configuration → Webhook → Edit**:
-
-- **Callback URL:** `https://api.SEU-DOMINIO.com/webhook/meta` (ex: `https://api.terlan.com.br/webhook/meta`).
-- **Verify Token:** o mesmo valor que você colocou em `WHATSAPP_VERIFY_TOKEN` no `.env` (pode ser qualquer string que você escolher).
-- Clique **Verify and Save**. A Meta fará um `GET` na sua URL; o backend responde com o `hub.challenge`.
-- Em **Webhook fields**, clique **Manage** e inscreva-se no campo **`messages`**.
-
-O valor exato da URL e do Verify Token também é exibido no painel da clínica em **WhatsApp**, com botão de copiar.
-
-### 5. (Produção) Adicionar número real
-
-Para substituir o número sandbox por um número comercial real:
-
-1. **WhatsApp → Phone Numbers → Add phone number**.
-2. Forneça um número que **não** esteja vinculado a nenhuma conta WhatsApp pessoal/Business no celular.
-3. Verifique via SMS ou ligação.
-4. Defina **Display Name** (precisa de aprovação da Meta) e país.
-5. Copie o novo **Phone Number ID** desse número.
-
-### 6. Vincular a clínica ao número
-
-1. Logue no painel (`https://app.SEU-DOMINIO.com`).
-2. Vá em **WhatsApp** na barra lateral.
-3. No card **Meta Cloud API**, cole o **Phone Number ID** e clique **Vincular**.
-4. Pronto — toda mensagem enviada recairá na Meta se a Evolution estiver fora.
-
-> Você pode escolher qual provider é o **preferencial** (botão "Tornar preferencial" em cada card). O outro vira fallback automático.
-
-### Verificação rápida
+**Verificação:**
 
 ```bash
-# 1. Webhook respondendo ao verify challenge:
+# Webhook funcionando (deve retornar: teste123)
 curl "https://api.SEU-DOMINIO.com/webhook/meta?hub.mode=subscribe&hub.verify_token=SEU_VERIFY_TOKEN&hub.challenge=teste123"
-# deve retornar: teste123
 
-# 2. Envio de teste pela própria API (autenticado):
+# Envio de mensagem de teste (substitua SEU_JWT)
 curl -X POST https://api.SEU-DOMINIO.com/whatsapp/test \
   -H "Authorization: Bearer SEU_JWT" \
   -H "Content-Type: application/json" \
@@ -266,9 +333,11 @@ curl -X POST https://api.SEU-DOMINIO.com/whatsapp/test \
 
 ## Adicionar uma nova clínica
 
+Cada clínica tem seus próprios dados, agenda, profissionais e sessão WhatsApp. O sistema é multi-tenant.
+
 ### Via painel (recomendado)
 
-Acesse `https://app.SEU-DOMINIO.com/login`, clique em **Cadastrar nova clínica** e preencha o formulário. Cada clínica fica completamente isolada (dados, agenda, sessão WhatsApp).
+Acesse `https://app.SEU-DOMINIO.com/login` → clique em **Cadastrar nova clínica** → preencha o formulário.
 
 ### Via API
 
@@ -284,13 +353,13 @@ curl -X POST https://api.SEU-DOMINIO.com/auth/register-clinic \
   }'
 ```
 
-Depois:
+**Após criar a clínica:**
 
-1. Logue no painel com essas credenciais.
-2. Cadastre profissionais em **Configurações → Profissionais**.
-3. Defina horários de funcionamento em **Configurações → Clínica**.
-4. Conecte o Google Calendar em **Configurações → Integrações**.
-5. Conecte o WhatsApp em **WhatsApp** (vincule o Phone Number ID da Meta).
+1. Logue no painel com as credenciais criadas
+2. **Configurações → Profissionais** — cadastre os profissionais com horários
+3. **Configurações → Clínica** — defina horários de funcionamento
+4. **WhatsApp** — conecte a instância Evolution (QR) ou vincule o Phone Number ID da Meta
+5. **Configurações → Integrações** — conecte o Google Calendar (opcional)
 
 ---
 
@@ -298,66 +367,214 @@ Depois:
 
 ```
 clinic-bot/
-├── docker-compose.yml          # produção (Traefik + SSL)
+├── docker-compose.yml          # produção (Traefik + SSL automático)
 ├── docker-compose.dev.yml      # desenvolvimento local
-├── .env.example
+├── .env.example                # template de variáveis — NUNCA commitar o .env real
 ├── traefik/
 │   ├── traefik.yml
-│   └── acme.json
+│   └── acme.json               # certificados SSL (deve ter chmod 600)
 ├── backend/
 │   ├── Dockerfile
-│   ├── prisma/schema.prisma
+│   ├── prisma/schema.prisma    # schema do banco — editar aqui para mudar tabelas
 │   └── src/
-│       ├── server.ts
-│       ├── config/env.ts
-│       ├── lib/                # prisma, redis, logger, errors, retry
-│       ├── api/                # rotas + middlewares
-│       ├── whatsapp/           # Meta Cloud API client + queue worker
-│       ├── ai/                 # Claude + prompt + orchestrator
-│       ├── calendar/           # Google Calendar (auth/availability/booking)
-│       ├── scheduler/          # booking + notifications
-│       └── jobs/               # reminder + cleanup (BullMQ)
-└── frontend/
+│       ├── server.ts           # entry point
+│       ├── config/env.ts       # validação de variáveis de ambiente
+│       ├── lib/                # prisma client, redis, logger, erros
+│       ├── api/
+│       │   ├── routes/         # appointments, auth, clients, professionals...
+│       │   └── middlewares/    # auth JWT, rate limit
+│       ├── whatsapp/           # Evolution API + Meta Cloud API + fallback logic
+│       ├── ai/                 # Claude, prompts, orquestrador de intenções
+│       ├── calendar/           # Google Calendar (OAuth, availability, booking)
+│       ├── scheduler/          # bookAppointment, cancelAppointment, reschedule
+│       └── jobs/               # BullMQ — lembretes, inatividade, backup
+└── dashboard/                  # painel administrativo (Next.js 15)
     ├── Dockerfile
     └── src/
-        ├── main.tsx, App.tsx
-        ├── components/Layout.tsx
-        ├── pages/              # Login, Dashboard, Appointments, Calendar,
-        │                       # Conversations, WhatsAppSetup, Settings
-        └── services/api.ts
+        ├── app/
+        │   ├── login/          # página de login + cadastro de clínica
+        │   └── dashboard/
+        │       ├── appointments/   # agendamentos (lista + criação manual)
+        │       ├── calendar/       # visão de calendário
+        │       ├── conversations/  # histórico WhatsApp
+        │       ├── patients/       # clientes/pacientes
+        │       └── settings/       # configurações da clínica
+        ├── lib/
+        │   ├── api.ts          # todas as chamadas ao backend
+        │   └── auth.ts         # hooks useAuth, useRegister, useClinic
+        └── components/
+            └── auth-guard.tsx  # proteção de rotas autenticadas
 ```
+
+---
+
+## Variáveis de ambiente
+
+Copie `.env.example` para `.env` e preencha. Tabela resumida:
+
+| Variável | Obrigatória | Descrição |
+|----------|-------------|----------|
+| `DOMAIN` | ✅ | Domínio base (ex: `clinica.com`) |
+| `ACME_EMAIL` | ✅ | E-mail para certificados Let's Encrypt |
+| `JWT_SECRET` | ✅ | Segredo JWT — gere com `openssl rand -hex 32` |
+| `POSTGRES_PASSWORD` | ✅ | Senha do banco |
+| `CRON_SECRET` | ✅ | Token do cron interno — gere com `openssl rand -hex 16` |
+| `ANTHROPIC_API_KEY` | ✅ | Chave `sk-ant-...` da Anthropic |
+| `CLAUDE_MODEL` | ✅ | Modelo Claude (padrão: `claude-sonnet-4-5`) |
+| `EVOLUTION_API_KEY` | ✅ | Chave da Evolution API (qualquer string longa) |
+| `EVOLUTION_WEBHOOK_TOKEN` | ✅ | Igual a `EVOLUTION_API_KEY` |
+| `FRONTEND_URL` | ✅ | `https://app.seu-dominio.com` |
+| `PUBLIC_API_URL` | ✅ | `https://api.seu-dominio.com` |
+| `GOOGLE_CLIENT_ID` | ⬜ | OAuth Google Calendar |
+| `GOOGLE_CLIENT_SECRET` | ⬜ | OAuth Google Calendar |
+| `GOOGLE_REDIRECT_URI` | ⬜ | `https://api.seu-dominio.com/google/callback` |
+| `WHATSAPP_TOKEN` | ⬜ | Token System User da Meta |
+| `WHATSAPP_PHONE_NUMBER_ID` | ⬜ | ID do número no painel Meta |
+| `WHATSAPP_VERIFY_TOKEN` | ⬜ | Token de verificação do webhook Meta |
+
+> `DATABASE_URL`, `REDIS_URL` e `EVOLUTION_API_URL` usam nomes de serviços Docker internos — **não alterar**.
 
 ---
 
 ## Troubleshooting
 
-### O Traefik não emite certificado
-- Verifique se DNS A está propagado: `dig api.SEU-DOMINIO.com`.
-- Verifique se as portas 80 e 443 estão abertas no firewall da Hetzner.
-- Confira `docker compose logs traefik`.
-- Garanta `chmod 600 traefik/acme.json`.
+### Dashboard abre, mas todas as chamadas de API falham (401 ou rede)
 
-### WhatsApp desconecta sozinho
-- Normal nas primeiras conexões. Clique em **Reconectar**.
-- Se persistir, clique em **Desconectar** e escaneie o QR novamente.
-- Sessões são persistidas em `wa_sessions` (volume Docker). Para resetar uma clínica:
-  ```bash
-  docker exec clinic-backend rm -rf /app/sessions/<clinicId>
-  ```
+**Causa:** O `NEXT_PUBLIC_API_URL` é injetado no bundle Next.js **em tempo de build**, não em runtime. Se o dashboard foi construído sem a variável correta, todas as requisições vão para `http://localhost:3000` (que não existe no navegador do usuário).
 
-### IA respondendo em texto, não em JSON
-- Verifique o modelo configurado em `CLAUDE_MODEL`.
-- O orquestrador faz fallback para `REPLY` se o parse falhar, mas isso pode comer ações de agendamento.
-- Aumente `CLAUDE_MAX_TOKENS` se o JSON estiver sendo truncado.
-
-### Refresh token Google expirou
-- Se o app Google está em **Testing**, refresh tokens expiram em 7 dias. Publique o app em produção (OAuth consent screen → Publish app).
-- Em **Configurações → Integrações**, clique em **Desconectar** e reconecte.
-
-### Erro `EACCES` no acme.json
+**Solução:** Rebuild obrigatório após qualquer mudança de domínio:
 ```bash
+docker compose build dashboard --no-cache
+docker compose up -d dashboard
+```
+Verifique se o `docker-compose.yml` tem:
+```yaml
+dashboard:
+  build:
+    args:
+      NEXT_PUBLIC_API_URL: https://api.${DOMAIN}
+```
+
+---
+
+### Login retorna 401 logo após o redirecionamento
+
+**Causa:** O handler de 401 na API estava redirecionando para `/login` mesmo durante o próprio login (sem token ativo), criando um loop.
+
+**Como verificar:** Abra o DevTools → Network → veja se `POST /auth/login` retorna 401 ou se é a requisição seguinte que falha.
+
+**Solução:** Já corrigido no código (`api.ts` — verifica `hadToken` antes de redirecionar). Se o problema voltar, confirme que `dashboard/src/lib/api.ts` tem o interceptor de 401 com a guarda `hadToken`.
+
+---
+
+### Página em branco / hydration error no dashboard
+
+**Causa:** O `AuthGuard` acessava `localStorage` direto no corpo do componente, causando mismatch SSR/client no Next.js 15.
+
+**Solução:** Já corrigido (`auth-guard.tsx` usa `useState` + `useEffect`). Se aparecer de novo, verifique se alguém adicionou acesso a `localStorage`/`sessionStorage` fora de um `useEffect`.
+
+---
+
+### Traefik não emite certificado SSL
+
+```bash
+# 1. Verificar propagação DNS (deve retornar o IP do servidor)
+dig api.SEU-DOMINIO.com
+
+# 2. Verificar se as portas 80 e 443 estão abertas (no firewall da Hetzner e no SO)
+curl http://api.SEU-DOMINIO.com/health
+
+# 3. Ver logs do Traefik
+docker compose logs traefik
+
+# 4. Permissão do acme.json (obrigatório: 600)
+ls -la traefik/acme.json
 chmod 600 traefik/acme.json
 ```
+
+> O Traefik **não emite** o certificado se as portas 80/443 estiverem bloqueadas. Verifique o painel de firewall da Hetzner.
+
+---
+
+### Container não sobe / sai com erro
+
+```bash
+# Ver logs do container com problema
+docker compose logs backend
+docker compose logs dashboard
+
+# Verificar variáveis que o backend recebe
+docker compose exec backend env | grep -E 'JWT|ANTHROPIC|DATABASE'
+
+# Reiniciar um container específico
+docker compose restart backend
+
+# Rebuild completo de um serviço
+docker compose build backend --no-cache
+docker compose up -d backend
+```
+
+---
+
+### IA não responde / responde texto puro em vez de ações
+
+- Confirme que `ANTHROPIC_API_KEY` não é o placeholder (`PREENCHA_SUA_CHAVE_sk-ant-...`)
+- Verifique o modelo: `CLAUDE_MODEL=claude-sonnet-4-5`
+- Se o JSON de resposta estiver truncado, aumente `CLAUDE_MAX_TOKENS=2048`
+- O orquestrador faz fallback para `REPLY` quando não consegue parsear o JSON — isso é normal em casos extremos, mas não deve ser frequente
+
+```bash
+# Ver logs da IA em tempo real
+docker compose logs -f backend | grep -i 'claude\|anthropic\|ai'
+```
+
+---
+
+### WhatsApp desconecta sozinho
+
+- Isso é normal nas primeiras conexões do baileys (Evolution). Clique em **Reconectar** no painel.
+- Se persistir, clique em **Desconectar** → escaneie o QR novamente.
+- Para resetar a sessão de uma clínica específica:
+  ```bash
+  docker compose exec evolution rm -rf /evolution/instances/<clinicId>
+  docker compose restart evolution
+  ```
+
+---
+
+### Refresh token Google expirou
+
+- App em modo **Testing** no Google: refresh tokens expiram em **7 dias**. Publique o app: **OAuth consent screen → Publish app**.
+- No painel: **Configurações → Integrações → Desconectar** → conecte novamente.
+
+---
+
+### Banco de dados: erro de conexão ou migration pendente
+
+```bash
+# Ver se o Postgres está healthy
+docker compose ps postgres
+
+# Rodar migrations manualmente
+docker compose exec backend npx prisma migrate deploy
+
+# Acessar o banco diretamente
+docker compose exec postgres psql -U clinic -d clinic_bot
+
+# Ver tabelas
+\dt
+```
+
+---
+
+### Agendamento criado mas não aparece na lista
+
+- Confirme que o `clinicId` do token JWT é o mesmo da criação (cada clínica só vê seus próprios dados)
+- Verifique o status: agendamentos cancelados não aparecem na listagem padrão
+- Confirme no banco:
+  ```bash
+  docker compose exec postgres psql -U clinic -d clinic_bot -c "SELECT id, status, source FROM \"Appointment\" ORDER BY \"dateTime\" DESC LIMIT 10;"
+  ```
 
 ---
 
