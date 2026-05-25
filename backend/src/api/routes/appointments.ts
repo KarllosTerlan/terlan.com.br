@@ -17,6 +17,7 @@ const listQuery = z.object({
 
 const createSchema = z.object({
   professionalId: z.string().uuid(),
+  serviceId: z.string().uuid().optional(),
   clientPhone: z.string().min(8),
   clientName: z.string().optional(),
   dateTime: z.string(),
@@ -70,10 +71,12 @@ export async function appointmentRoutes(app: FastifyInstance) {
     const appt = await bookAppointment({
       clinicId: req.auth!.clinicId,
       professionalId: body.professionalId,
+      serviceId: body.serviceId,
       clientId: client.id,
       dateTime: new Date(body.dateTime),
       duration: body.duration,
       notes: body.notes,
+      source: 'MANUAL',
     });
     return reply.status(201).send({ appointment: appt });
   });

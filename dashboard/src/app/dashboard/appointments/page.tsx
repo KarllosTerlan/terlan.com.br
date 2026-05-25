@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '@/lib/api';
 import { formatDateTime, STATUS_LABELS, STATUS_COLORS } from '@/lib/utils';
-import { Search, Filter, Download, XCircle, RefreshCw } from 'lucide-react';
+import { Search, Download, XCircle, Plus, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 type Appointment = {
@@ -19,12 +19,198 @@ type Appointment = {
   professional: { name: string };
 };
 
+type Professional = { id: string; name: string };
+type Service = { id: string; name: string; durationMinutes: number; active: boolean };
+
+const EMPTY_FORM = {
+  professionalId: '',
+  serviceId: '',
+  clientPhone: '',
+  clientName: '',
+  date: '',
+  time: '',
+  duration: 30,
+  notes: '',
+};
+
+function NewAppointmentModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const { toast } = useToast();
+  const [form, setForm] = useState(EMPTY_FORM);
+
+  const { data: prosData } = useQuery({
+    queryKey: ['professionals'],
+    queryFn: api.getProfessionals,
+  });
+  const { data: svcData } = useQuery({
+    queryKey: ['services'],
+    queryFn: api.getServices,
+  });
+
+  const professionals: Professional[] =
+    (prosData as { professionals: Professional[] } | undefined)?.professionals ?? [];
+  const services: Service[] = (
+    (svcData as { services: Service[] } | undefined)?.services ?? []
+  ).filter((s) => s.active);
+
+  const createMut = useMutation({
+    mutationFn: () => {
+      const dateTime = `${form.date}T${form.time}:00`;
+      return api.createAppointment({
+        professionalId: form.professionalId,
+        serviceId: form.serviceId || undefined,
+        clientPhone: form.clientPhone,
+        clientName: form.clientName || undefined,
+        dateTime,
+        duration: form.duration,
+        notes: form.notes || undefined,
+      });
+    },
+    onSuccess: () => {
+      toast({ title: 'Agendamento criado!' });
+      onSaved();
+      onClose();
+    },
+    onError: (err) => toast({ title: (err as Error).message, variant: 'destructive' }),
+  });
+
+  const handleServiceChange = (serviceId: string) => {
+    const svc = services.find((s) => s.id === serviceId);
+    setForm((f) => ({ ...f, serviceId, duration: svc ? svc.durationMinutes : f.duration }));
+  };
+
+  const valid =
+    form.professionalId && form.clientPhone.length >= 8 && form.date && form.time;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="card w-full max-w-lg">
+        <div className="card-header flex items-center justify-between">
+          <h2 className="font-semibold text-white">Novo Agendamento</h2>
+          <button onClick={onClose} className="text-muted hover:text-white transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="card-body space-y-4">
+          <label className="space-y-1.5 block">
+            <span className="text-xs text-muted font-medium">Profissional *</span>
+            <select
+              className="input"
+              value={form.professionalId}
+              onChange={(e) => setForm((f) => ({ ...f, professionalId: e.target.value }))}
+            >
+              <option value="">Selecione...</option>
+              {professionals.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="space-y-1.5 block">
+            <span className="text-xs text-muted font-medium">Serviço</span>
+            <select
+              className="input"
+              value={form.serviceId}
+              onChange={(e) => handleServiceChange(e.target.value)}
+            >
+              <option value="">Sem serviço específico</option>
+              {services.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </label>
+
+          <div className="grid grid-cols-2 gap-3">
+            <label className="space-y-1.5 block">
+              <span className="text-xs text-muted font-medium">Data *</span>
+              <input
+                type="date"
+                className="input"
+                value={form.date}
+                onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+              />
+            </label>
+            <label className="space-y-1.5 block">
+              <span className="text-xs text-muted font-medium">Hora *</span>
+              <input
+                type="time"
+                className="input"
+                value={form.time}
+                onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))}
+              />
+            </label>
+          </div>
+
+          <label className="space-y-1.5 block">
+            <span className="text-xs text-muted font-medium">Duração (minutos)</span>
+            <input
+              type="number"
+              min={5}
+              max={480}
+              className="input"
+              value={form.duration}
+              onChange={(e) => setForm((f) => ({ ...f, duration: Number(e.target.value) }))}
+            />
+          </label>
+
+          <div className="grid grid-cols-2 gap-3">
+            <label className="space-y-1.5 block">
+              <span className="text-xs text-muted font-medium">Telefone *</span>
+              <input
+                type="tel"
+                className="input"
+                placeholder="+5511999999999"
+                value={form.clientPhone}
+                onChange={(e) => setForm((f) => ({ ...f, clientPhone: e.target.value }))}
+              />
+            </label>
+            <label className="space-y-1.5 block">
+              <span className="text-xs text-muted font-medium">Nome do paciente</span>
+              <input
+                type="text"
+                className="input"
+                placeholder="Opcional"
+                value={form.clientName}
+                onChange={(e) => setForm((f) => ({ ...f, clientName: e.target.value }))}
+              />
+            </label>
+          </div>
+
+          <label className="space-y-1.5 block">
+            <span className="text-xs text-muted font-medium">Observações</span>
+            <textarea
+              className="input h-20 resize-none"
+              placeholder="Opcional..."
+              value={form.notes}
+              onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+            />
+          </label>
+
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onClose} className="btn-ghost flex-1">
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={() => createMut.mutate()}
+              disabled={!valid || createMut.isPending}
+              className="btn-primary flex-1"
+            >
+              {createMut.isPending ? 'Salvando...' : 'Criar Agendamento'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AppointmentsPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
+  const [showNew, setShowNew] = useState(false);
 
   const params: Record<string, string> = { page: String(page), limit: '20' };
   if (search) params.search = search;
@@ -50,19 +236,32 @@ export default function AppointmentsPage() {
 
   return (
     <div className="space-y-5">
+      {showNew && (
+        <NewAppointmentModal
+          onClose={() => setShowNew(false)}
+          onSaved={() => qc.invalidateQueries({ queryKey: ['appointments'] })}
+        />
+      )}
+
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-white">Agendamentos</h1>
           <p className="text-sm text-muted mt-0.5">{total} no total</p>
         </div>
-        <a
-          href={`${api.exportAppointments()}`}
-          download
-          className="btn-ghost text-xs gap-1.5"
-        >
-          <Download className="h-3.5 w-3.5" />
-          Exportar CSV
-        </a>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowNew(true)} className="btn-primary text-sm gap-1.5">
+            <Plus className="h-4 w-4" />
+            Novo Agendamento
+          </button>
+          <a
+            href={`${api.exportAppointments()}`}
+            download
+            className="btn-ghost text-xs gap-1.5"
+          >
+            <Download className="h-3.5 w-3.5" />
+            CSV
+          </a>
+        </div>
       </div>
 
       {/* Filters */}
