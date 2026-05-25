@@ -40,7 +40,7 @@ export default function CalendarPage() {
     queryFn: () =>
       api.getAppointments({
         date: format(startOfMonth(currentMonth), 'yyyy-MM-dd'),
-        limit: 300,
+        limit: '300',
       }),
   });
 
