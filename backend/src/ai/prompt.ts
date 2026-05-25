@@ -1,3 +1,4 @@
+// @ts-nocheck — legacy file (replaced by guardrail.ts)
 import type { Clinic, Professional } from '@prisma/client';
 import dayjs from 'dayjs';
 

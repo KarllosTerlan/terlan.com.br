@@ -2,7 +2,7 @@ import dayjs from 'dayjs';
 import type { Clinic, Professional } from '@prisma/client';
 import { getCalendarFor } from './client.js';
 import { retry } from '../lib/retry.js';
-import prisma from '../db/prisma.js';
+import { prisma } from '../lib/prisma.js';
 
 export async function createGoogleEvent(
   clinic: Clinic,

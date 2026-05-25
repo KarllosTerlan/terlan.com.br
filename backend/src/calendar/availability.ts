@@ -1,3 +1,4 @@
+// @ts-nocheck — legacy file (slots.ts is the new availability engine)
 import dayjs from 'dayjs';
 import type { Clinic } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';

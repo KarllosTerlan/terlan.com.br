@@ -2,6 +2,7 @@
 
 import { prisma } from './prisma.js';
 import { logger } from './logger.js';
+import type { Prisma } from '@prisma/client';
 
 export type LogLevel = 'INFO' | 'WARNING' | 'ERROR';
 
@@ -19,7 +20,7 @@ export async function writeLog(
         level,
         scope,
         message,
-        metadata,
+        metadata: metadata as Prisma.InputJsonValue,
       },
     });
   } catch (err) {

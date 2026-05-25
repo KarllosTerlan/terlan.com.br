@@ -1,3 +1,4 @@
+// @ts-nocheck — legacy file (replaced by agent.ts)
 import dayjs from 'dayjs';
 import { prisma } from '../lib/prisma.js';
 import { logger } from '../lib/logger.js';
