@@ -14,6 +14,7 @@ export function setToken(token: string) {
 export function clearToken() {
   localStorage.removeItem('token');
   localStorage.removeItem('clinic');
+  localStorage.removeItem('user');
 }
 
 export type Clinic = {
@@ -39,9 +40,14 @@ async function request<T>(
   });
 
   if (res.status === 401) {
+    const hadToken = !!getToken();
     clearToken();
-    if (typeof window !== 'undefined') window.location.href = '/login';
-    throw new Error('Sessão expirada');
+    // Só redireciona se havia um token ativo (sessão expirada), não no login
+    if (hadToken && typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
+    const errBody = await res.json().catch(() => ({ error: 'Não autorizado' }));
+    throw new Error((errBody as { error?: string }).error ?? 'Sessão expirada');
   }
 
   if (!res.ok) {
@@ -55,7 +61,7 @@ async function request<T>(
 export const api = {
   // ── Auth ──
   login: (email: string, password: string) =>
-    request<{ token: string; clinic: Clinic; user: { id: string; email: string; role: string } }>(
+    request<{ token: string; user: { id: string; name: string; email: string; role: string; clinic: Clinic } }>(
       '/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) },
     ),
 

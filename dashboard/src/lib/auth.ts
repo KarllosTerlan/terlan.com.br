@@ -15,7 +15,13 @@ export function useAuth() {
     try {
       const res = await api.login(email, password);
       setToken(res.token);
-      localStorage.setItem('clinic', JSON.stringify(res.clinic));
+      localStorage.setItem('clinic', JSON.stringify(res.user.clinic));
+      localStorage.setItem('user', JSON.stringify({
+        id: res.user.id,
+        name: res.user.name,
+        email: res.user.email,
+        role: res.user.role,
+      }));
       router.push('/dashboard');
     } catch (err) {
       setError((err as Error).message);
@@ -35,8 +41,14 @@ export function useAuth() {
 export function useClinic(): Clinic | null {
   const [clinic, setClinic] = useState<Clinic | null>(null);
   useEffect(() => {
-    const stored = localStorage.getItem('clinic');
-    if (stored) setClinic(JSON.parse(stored) as Clinic);
+    try {
+      const stored = localStorage.getItem('clinic');
+      if (stored && stored !== 'undefined' && stored !== 'null') {
+        setClinic(JSON.parse(stored) as Clinic);
+      }
+    } catch {
+      localStorage.removeItem('clinic');
+    }
   }, []);
   return clinic;
 }

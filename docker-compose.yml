@@ -130,6 +130,8 @@ services:
     build:
       context: ./dashboard
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: https://api.${DOMAIN}
     container_name: clinic-dashboard
     restart: unless-stopped
     depends_on:
@@ -176,4 +178,3 @@ networks:
     name: clinic-network
   web:
     external: true
-    driver: bridge
