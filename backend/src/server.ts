@@ -18,6 +18,14 @@ import { webhookRoutes } from './api/routes/webhook.js';
 import { dashboardRoutes } from './api/routes/dashboard.js';
 import { googleRoutes } from './api/routes/google.js';
 import { conversationRoutes } from './api/routes/conversations.js';
+import { serviceRoutes } from './api/routes/services.js';
+import { workingHoursRoutes } from './api/routes/working-hours.js';
+import { agentConfigRoutes } from './api/routes/agent-config.js';
+import { blacklistRoutes } from './api/routes/blacklist.js';
+import { logsRoutes } from './api/routes/logs.js';
+import { backupRoutes } from './api/routes/backup.js';
+import { exportRoutes } from './api/routes/export.js';
+import { cronRoutes } from './api/routes/cron.js';
 
 import { startIncomingWorker } from './whatsapp/handler.js';
 import { startReminderJob } from './jobs/reminder.job.js';
@@ -33,7 +41,7 @@ async function buildApp() {
   const app = Fastify({ logger });
 
   await app.register(cors, {
-    origin: [env.FRONTEND_URL, 'http://localhost:5173'],
+    origin: [env.FRONTEND_URL, 'http://localhost:5173', 'http://localhost:3001'],
     credentials: true,
   });
 
@@ -68,6 +76,14 @@ async function buildApp() {
   await app.register(dashboardRoutes);
   await app.register(googleRoutes);
   await app.register(conversationRoutes);
+  await app.register(serviceRoutes);
+  await app.register(workingHoursRoutes);
+  await app.register(agentConfigRoutes);
+  await app.register(blacklistRoutes);
+  await app.register(logsRoutes);
+  await app.register(backupRoutes);
+  await app.register(exportRoutes);
+  await app.register(cronRoutes);
 
   return app;
 }

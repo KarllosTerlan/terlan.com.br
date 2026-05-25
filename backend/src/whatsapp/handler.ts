@@ -1,7 +1,7 @@
 import { Queue, Worker } from 'bullmq';
 import { redis } from '../lib/redis.js';
 import { logger } from '../lib/logger.js';
-import { processIncomingMessage } from '../ai/orchestrator.js';
+import { runAgent } from '../ai/agent.js';
 import { logIncoming } from './providers/service.js';
 import type { ProviderName } from './providers/types.js';
 
@@ -40,7 +40,7 @@ export function startIncomingWorker() {
       const { clinicId, fromPhone, text, pushName, provider, externalId } = job.data;
       logger.info({ clinicId, fromPhone, text, provider }, 'Incoming WhatsApp message');
       await logIncoming({ clinicId, provider, fromPhone, text, externalId });
-      await processIncomingMessage({ clinicId, phone: fromPhone, text, pushName });
+      await runAgent({ clinicId, phone: fromPhone, text, pushName });
     },
     {
       connection: redis,

@@ -7,6 +7,10 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────
+
 enum Plan {
   FREE
   PRO
@@ -23,111 +27,104 @@ enum AppointmentStatus {
   CONFIRMED
   CANCELLED
   COMPLETED
+  NO_SHOW
 }
 
-model Clinic {
-  id                   String   @id @default(uuid())
-  name                 String
-  phone                String?
-  email                String?
-  plan                 Plan     @default(FREE)
-  active               Boolean  @default(true)
+enum AppointmentSource {
+  AGENT
+  MANUAL
+  API
+}
 
-  // Google Calendar
-  googleCalendarId     String?
-  googleRefreshToken   String?
+enum ConversationOutcome {
+  UNKNOWN    // conversa ainda ativa ou não classificada
+  BOOKED     // paciente fechou consulta
+  ABANDONED  // paciente não fechou e conversa encerrou
+  INFO_ONLY  // paciente só pediu informação
+  CANCELLED  // paciente cancelou durante a conversa
+}
+
+enum LogLevel {
+  INFO
+  WARNING
+  ERROR
+}
+
+enum BackupStatus {
+  RUNNING
+  SUCCESS
+  ERROR
+}
+
+// ─────────────────────────────────────────────
+// Clinic (raiz multi-tenant)
+// ─────────────────────────────────────────────
+
+model Clinic {
+  id     String  @id @default(uuid())
+  name   String
+  phone  String?
+  email  String?
+  plan   Plan    @default(FREE)
+  active Boolean @default(true)
+
+  // Google Calendar OAuth
+  googleCalendarId   String?
+  googleRefreshToken String?
+  googleAccessToken  String?
+  googleTokenExpiry  DateTime?
+  googleSyncEnabled  Boolean   @default(true)
+  googleTokenValid   Boolean   @default(false)
 
   // Business config
-  timezone             String   @default("America/Sao_Paulo")
-  businessHours        Json     @default("{\"mon\":[\"08:00\",\"18:00\"],\"tue\":[\"08:00\",\"18:00\"],\"wed\":[\"08:00\",\"18:00\"],\"thu\":[\"08:00\",\"18:00\"],\"fri\":[\"08:00\",\"18:00\"],\"sat\":null,\"sun\":null}")
-  welcomeMessage       String   @default("Olá! Sou a recepcionista virtual. Como posso ajudar?")
-  offHoursMessage      String   @default("No momento estamos fora do horário de atendimento. Retornaremos em breve.")
+  timezone        String @default("America/Sao_Paulo")
+  welcomeMessage  String @default("Olá! Sou a recepcionista virtual. Como posso ajudar?")
+  offHoursMessage String @default("No momento estamos fora do horário de atendimento. Retornaremos em breve.")
 
   // WhatsApp providers — primary: Evolution (self-hosted), fallback: Meta Cloud API
-  whatsappEvolutionInstance String? @unique     // instance name in Evolution API
-  whatsappPhoneNumberId     String? @unique     // Meta Cloud API phone_number_id
-  whatsappDisplayNumber     String?             // human readable number (from either provider)
-  whatsappPreferredProvider String  @default("evolution") // "evolution" | "meta"
+  whatsappEvolutionInstance String? @unique
+  whatsappPhoneNumberId     String? @unique
+  whatsappDisplayNumber     String?
+  whatsappPreferredProvider String  @default("evolution")
 
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  // Agent configuration (controlled via dashboard)
+  agentSystemPrompt     String  @default("Você é o assistente virtual de {{CLINIC_NAME}}.\n\nData e hora atual: {{TODAY_DATE}}\nFuso horário: {{TIMEZONE}}\n\nSERVIÇOS DISPONÍVEIS:\n{{SERVICES_LIST}}\n\nHORÁRIOS DISPONÍVEIS (próximos 7 dias):\n{{AVAILABLE_SLOTS}}\n\nHORÁRIOS DE ATENDIMENTO:\n{{WORKING_HOURS}}\n\nDADOS JÁ COLETADOS DO PACIENTE:\n{{COLLECTED_DATA}}\n\nAGENDAMENTOS FUTUROS DO PACIENTE:\n{{PATIENT_APPOINTMENTS}}\n\nPara agendar, preciso de: {{REQUIRED_FIELDS}}\n\nBase de respostas aprovadas (FAQ):\n{{FAQ_CONTEXT}}\n\nREGRAS OBRIGATÓRIAS:\n1. Só ofereça horários de {{AVAILABLE_SLOTS}}. Nunca invente.\n2. Só chame confirm_appointment com TODOS os dados E confirmação do paciente.\n3. Colete um dado por vez, de forma natural.\n4. Use check_availability antes de sugerir qualquer horário.\n5. Para remarcar, use list_my_appointments depois reschedule_appointment.\n6. Para cancelar, use list_my_appointments depois cancel_appointment.\n7. NUNCA invente um appointment_id. Use list_my_appointments.\n8. Use o service_id (UUID) da lista de serviços.")
+  agentRequiredFields   Json    @default("[\"name\"]")
+  agentCustomFields     Json    @default("[]")
+  agentFaqEntries       Json    @default("[]")
+  agentInstructionNotes String  @default("")
+  antiHallucinationMode Boolean @default(true)
+  agentModel            String  @default("claude-sonnet-4-5")
+  agentTemperature      Float   @default(0.3)
+  agentMaxTokens        Int     @default(800)
 
-  professionals        Professional[]
-  appointments         Appointment[]
-  conversations        Conversation[]
-  users                User[]
-  messageLogs          MessageLog[]
+  // Notification routing
+  notifyWhatsappAlerts   String?
+  notifyWhatsappSchedule String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  professionals      Professional[]
+  appointments       Appointment[]
+  conversations      Conversation[]
+  users              User[]
+  messageLogs        MessageLog[]
+  services           Service[]
+  workingHours       WorkingHours[]
+  scheduleExceptions ScheduleException[]
+  phoneBlacklist     PhoneBlacklist[]
+  systemLogs         SystemLog[]
+  backupConfig       BackupConfig?
+  backupRuns         BackupRun[]
+  calendarSyncLogs   CalendarSyncLog[]
 
   @@index([active])
 }
 
-model Professional {
-  id              String   @id @default(uuid())
-  clinicId        String
-  name            String
-  specialty       String?
-  whatsappNumber  String?
-  calendarId      String?  // separate Google calendar per professional (optional)
-  defaultDuration Int      @default(30) // minutes
-  active          Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  clinic       Clinic        @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  appointments Appointment[]
-
-  @@index([clinicId, active])
-}
-
-model Client {
-  id        String   @id @default(uuid())
-  phone     String   @unique
-  name      String?
-  email     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  appointments  Appointment[]
-}
-
-model Appointment {
-  id             String            @id @default(uuid())
-  clinicId       String
-  professionalId String
-  clientId       String
-  googleEventId  String?
-  dateTime       DateTime
-  duration       Int               @default(30) // minutes
-  status         AppointmentStatus @default(PENDING)
-  notes          String?
-  reminderSent   Boolean           @default(false)
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
-
-  clinic       Clinic       @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  professional Professional @relation(fields: [professionalId], references: [id])
-  client       Client       @relation(fields: [clientId], references: [id])
-
-  @@index([clinicId, dateTime])
-  @@index([clinicId, status])
-  @@index([professionalId, dateTime])
-}
-
-model Conversation {
-  id            String   @id @default(uuid())
-  clinicId      String
-  clientPhone   String
-  messages      Json     @default("[]") // [{role, content, ts}]
-  context       Json     @default("{}") // { lastIntent, pendingBooking, ... }
-  lastMessageAt DateTime @default(now())
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-
-  @@unique([clinicId, clientPhone])
-  @@index([clinicId, lastMessageAt])
-}
+// ─────────────────────────────────────────────
+// User (staff per clinic)
+// ─────────────────────────────────────────────
 
 model User {
   id           String   @id @default(uuid())
@@ -145,23 +142,296 @@ model User {
   @@index([clinicId])
 }
 
-/// Audit log of every outbound WhatsApp message attempt: which provider was used and whether it succeeded.
+// ─────────────────────────────────────────────
+// Professional (doctors/therapists per clinic)
+// ─────────────────────────────────────────────
+
+model Professional {
+  id              String   @id @default(uuid())
+  clinicId        String
+  name            String
+  specialty       String?
+  bio             String?
+  whatsappNumber  String?
+  calendarId      String?
+  defaultDuration Int      @default(30)
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  clinic       Clinic        @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@index([clinicId, active])
+}
+
+// ─────────────────────────────────────────────
+// Client (patients — global by phone)
+// ─────────────────────────────────────────────
+
+model Client {
+  id          String    @id @default(uuid())
+  phone       String    @unique
+  name        String?
+  email       String?
+  cpf         String?
+  birthdate   DateTime?
+  address     String?
+  insurance   String?
+  isVip       Boolean   @default(false)
+  notes       String?
+  tags        Json      @default("[]")
+  customData  Json      @default("{}")
+  lastContact DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  appointments  Appointment[]
+  conversations Conversation[]
+
+  @@index([phone])
+}
+
+// ─────────────────────────────────────────────
+// Service (procedures per clinic)
+// ─────────────────────────────────────────────
+
+model Service {
+  id              String   @id @default(uuid())
+  clinicId        String
+  name            String
+  description     String?
+  durationMinutes Int      @default(30)
+  price           Float?
+  color           String   @default("#9e3d22")
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  clinic       Clinic        @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@index([clinicId, active])
+}
+
+// ─────────────────────────────────────────────
+// WorkingHours (schedule per clinic per day)
+// ─────────────────────────────────────────────
+
+model WorkingHours {
+  id                  String  @id @default(uuid())
+  clinicId            String
+  weekday             Int     // 0=Sun, 1=Mon, ..., 6=Sat
+  startTime           String  // "08:00"
+  endTime             String  // "18:00"
+  breakStartTime      String?
+  breakEndTime        String?
+  slotIntervalMinutes Int     @default(30)
+  active              Boolean @default(true)
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@index([clinicId, weekday])
+}
+
+// ─────────────────────────────────────────────
+// ScheduleException (holidays, closures, VIP-only)
+// ─────────────────────────────────────────────
+
+model ScheduleException {
+  id        String  @id @default(uuid())
+  clinicId  String
+  date      String  // "2026-12-25"
+  allDay    Boolean @default(true)
+  vipOnly   Boolean @default(false)
+  startTime String?
+  endTime   String?
+  reason    String?
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@index([clinicId, date])
+}
+
+// ─────────────────────────────────────────────
+// Appointment
+// ─────────────────────────────────────────────
+
+model Appointment {
+  id               String            @id @default(uuid())
+  clinicId         String
+  professionalId   String
+  clientId         String
+  serviceId        String?
+  googleEventId    String?
+  dateTime         DateTime
+  endsAt           DateTime?
+  duration         Int               @default(30)
+  status           AppointmentStatus @default(PENDING)
+  source           AppointmentSource @default(AGENT)
+  notes            String?
+  cancelledReason  String?
+  patientSnapshot  Json              @default("{}")
+  reminderSent     Boolean           @default(false)
+  hourReminderSent Boolean           @default(false)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  clinic       Clinic            @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  professional Professional      @relation(fields: [professionalId], references: [id])
+  client       Client            @relation(fields: [clientId], references: [id])
+  service      Service?          @relation(fields: [serviceId], references: [id])
+  calendarSync CalendarSyncLog[]
+
+  @@index([clinicId, dateTime])
+  @@index([clinicId, status])
+  @@index([professionalId, dateTime])
+  @@index([clientId])
+  @@index([serviceId])
+}
+
+// ─────────────────────────────────────────────
+// Conversation (WhatsApp conversation state)
+// ─────────────────────────────────────────────
+
+model Conversation {
+  id            String              @id @default(uuid())
+  clinicId      String
+  clientPhone   String
+  clientId      String?
+  messages      Json                @default("[]")
+  context       Json                @default("{}")
+  active        Boolean             @default(true)
+  outcome       ConversationOutcome @default(UNKNOWN)
+  messageCount  Int                 @default(0)
+  lastMessageAt DateTime            @default(now())
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  clinic  Clinic  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  client  Client? @relation(fields: [clientId], references: [id])
+
+  @@unique([clinicId, clientPhone])
+  @@index([clinicId, lastMessageAt])
+  @@index([clinicId, active])
+  @@index([clinicId, outcome])
+}
+
+// ─────────────────────────────────────────────
+// MessageLog (audit of all WhatsApp messages)
+// ─────────────────────────────────────────────
+
 model MessageLog {
   id         String   @id @default(uuid())
   clinicId   String
-  direction  String   // "out" | "in"
-  provider   String   // "evolution" | "meta"
+  direction  String
+  provider   String
   toPhone    String?
   fromPhone  String?
   text       String
-  externalId String?  // wamId (meta) or key.id (evolution)
+  externalId String?
   ok         Boolean  @default(true)
   error      String?
-  fallback   Boolean  @default(false) // true if Meta was used because Evolution failed
+  fallback   Boolean  @default(false)
   createdAt  DateTime @default(now())
 
   clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
 
   @@index([clinicId, createdAt])
   @@index([clinicId, provider])
+}
+
+// ─────────────────────────────────────────────
+// PhoneBlacklist
+// ─────────────────────────────────────────────
+
+model PhoneBlacklist {
+  id        String   @id @default(uuid())
+  clinicId  String
+  phone     String
+  reason    String?
+  blockedAt DateTime @default(now())
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicId, phone])
+  @@index([clinicId])
+}
+
+// ─────────────────────────────────────────────
+// SystemLog (observability)
+// ─────────────────────────────────────────────
+
+model SystemLog {
+  id        String   @id @default(uuid())
+  clinicId  String
+  level     LogLevel @default(INFO)
+  scope     String
+  message   String
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@index([clinicId, createdAt])
+  @@index([clinicId, scope])
+  @@index([clinicId, level])
+}
+
+// ─────────────────────────────────────────────
+// BackupConfig
+// ─────────────────────────────────────────────
+
+model BackupConfig {
+  id             String    @id @default(uuid())
+  clinicId       String    @unique
+  enabled        Boolean   @default(false)
+  frequencyHours Int       @default(24)
+  retentionDays  Int       @default(15)
+  nextRunAt      DateTime  @default(now())
+  lastRunAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────────────────────
+// BackupRun
+// ─────────────────────────────────────────────
+
+model BackupRun {
+  id           String       @id @default(uuid())
+  clinicId     String
+  status       BackupStatus @default(RUNNING)
+  trigger      String       @default("manual")
+  filePath     String?
+  sizeBytes    Int?
+  errorMessage String?
+  metadata     Json         @default("{}")
+  startedAt    DateTime     @default(now())
+  finishedAt   DateTime?
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@index([clinicId, startedAt])
+}
+
+// ─────────────────────────────────────────────
+// CalendarSyncLog
+// ─────────────────────────────────────────────
+
+model CalendarSyncLog {
+  id            String    @id @default(uuid())
+  clinicId      String
+  direction     String
+  appointmentId String?
+  googleEventId String?
+  status        String
+  errorMessage  String?
+  syncedAt      DateTime  @default(now())
+
+  clinic      Clinic       @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id])
+
+  @@index([clinicId, syncedAt])
 }

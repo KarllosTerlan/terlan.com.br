@@ -135,11 +135,13 @@ services:
       WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN}
       WHATSAPP_BUSINESS_ACCOUNT_ID: ${WHATSAPP_BUSINESS_ACCOUNT_ID:-}
       WHATSAPP_API_VERSION: ${WHATSAPP_API_VERSION:-v19.0}
-      FRONTEND_URL: ${FRONTEND_URL}
+      FRONTEND_URL: ${FRONTEND_URL:-https://app.${DOMAIN}}
       PUBLIC_API_URL: ${PUBLIC_API_URL}
-      RATE_LIMIT_MS: ${RATE_LIMIT_MS}
-      REMINDER_LEAD_MINUTES: ${REMINDER_LEAD_MINUTES}
-      CONVERSATION_RETENTION_DAYS: ${CONVERSATION_RETENTION_DAYS}
+      CRON_SECRET: ${CRON_SECRET}
+      APP_NAME: ${APP_NAME:-ClinicBot Pro}
+      BACKUP_DIR: /app/backups
+    volumes:
+      - backups:/app/backups
     networks:
       - clinic-network
     labels:
@@ -150,29 +152,48 @@ services:
       - "traefik.http.routers.backend.tls.certresolver=le"
       - "traefik.http.services.backend.loadbalancer.server.port=3000"
 
-  frontend:
+  dashboard:
     build:
-      context: ./frontend
+      context: ./dashboard
       dockerfile: Dockerfile
-      args:
-        VITE_API_URL: ${VITE_API_URL}
-    container_name: clinic-frontend
+    container_name: clinic-dashboard
     restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: https://api.${DOMAIN}
     networks:
       - clinic-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`app.${DOMAIN}`)"
-      - "traefik.http.routers.frontend.entrypoints=websecure"
-      - "traefik.http.routers.frontend.tls=true"
-      - "traefik.http.routers.frontend.tls.certresolver=le"
-      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+      - "traefik.http.routers.dashboard.rule=Host(`app.${DOMAIN}`)"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls=true"
+      - "traefik.http.routers.dashboard.tls.certresolver=le"
+      - "traefik.http.services.dashboard.loadbalancer.server.port=3001"
+
+  cron:
+    image: curlimages/curl:latest
+    container_name: clinic-cron
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - clinic-network
+    entrypoint: |
+      sh -c 'while true; do
+        curl -sf -X POST http://backend:3000/cron/reminders -H "x-cron-token: ${CRON_SECRET}" || true
+        curl -sf -X POST http://backend:3000/cron/inactivity -H "x-cron-token: ${CRON_SECRET}" || true
+        curl -sf -X POST http://backend:3000/cron/backup -H "x-cron-token: ${CRON_SECRET}" || true
+        sleep 300
+      done'
 
 volumes:
   pgdata:
   redisdata:
   evolution_instances:
   evolution_store:
+  backups:
 
 networks:
   clinic-network:

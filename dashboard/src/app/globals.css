@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --radius: 0.75rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-white antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-border;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #2a4060;
+  }
+}
+
+@layer utilities {
+  .card {
+    @apply rounded-2xl border border-border bg-surface shadow-[0_4px_24px_rgba(0,0,0,0.3)];
+  }
+
+  .card-header {
+    @apply px-5 py-4 border-b border-border;
+  }
+
+  .card-body {
+    @apply px-5 py-4;
+  }
+
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+
+  .badge-primary {
+    @apply badge bg-primary/10 text-primary border border-primary/20;
+  }
+
+  .badge-success {
+    @apply badge bg-success/10 text-success border border-success/20;
+  }
+
+  .badge-warning {
+    @apply badge bg-warning/10 text-warning border border-warning/20;
+  }
+
+  .badge-danger {
+    @apply badge bg-danger/10 text-danger border border-danger/20;
+  }
+
+  .badge-muted {
+    @apply badge bg-white/5 text-muted border border-white/10;
+  }
+
+  .input {
+    @apply w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-white placeholder-muted-subtle transition-colors focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary text-background hover:bg-primary-dark shadow-[0_0_20px_rgba(0,212,255,0.15)];
+  }
+
+  .btn-ghost {
+    @apply btn border border-border bg-transparent text-muted hover:bg-white/5 hover:text-white;
+  }
+
+  .btn-danger {
+    @apply btn bg-danger/10 text-danger border border-danger/20 hover:bg-danger/20;
+  }
+}

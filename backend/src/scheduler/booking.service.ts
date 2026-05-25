@@ -1,8 +1,9 @@
-import dayjs from 'dayjs';
+import { addMinutes } from 'date-fns';
 import { prisma } from '../lib/prisma.js';
 import { logger } from '../lib/logger.js';
 import { createGoogleEvent, cancelGoogleEvent } from '../calendar/booking.js';
 import { notifyProfessional, notifyClient } from './notification.service.js';
+import { notifyScheduleEvent } from '../lib/notifications.js';
 
 export async function bookAppointment(args: {
   clinicId: string;
@@ -11,11 +12,24 @@ export async function bookAppointment(args: {
   dateTime: Date;
   duration: number;
   notes?: string;
+  serviceId?: string;
+  source?: 'AGENT' | 'MANUAL' | 'API';
 }) {
   const clinic = await prisma.clinic.findUnique({ where: { id: args.clinicId } });
   const professional = await prisma.professional.findUnique({ where: { id: args.professionalId } });
   const client = await prisma.client.findUnique({ where: { id: args.clientId } });
   if (!clinic || !professional || !client) throw new Error('Invalid references for booking');
+
+  const service = args.serviceId
+    ? await prisma.service.findUnique({ where: { id: args.serviceId } })
+    : null;
+
+  const patientSnapshot = {
+    name: client.name,
+    phone: client.phone,
+    email: client.email,
+    isVip: client.isVip,
+  };
 
   const appt = await prisma.appointment.create({
     data: {
@@ -23,9 +37,13 @@ export async function bookAppointment(args: {
       professionalId: args.professionalId,
       clientId: args.clientId,
       dateTime: args.dateTime,
+      endsAt: addMinutes(args.dateTime, args.duration),
       duration: args.duration,
       notes: args.notes,
       status: 'CONFIRMED',
+      source: args.source ?? 'MANUAL',
+      serviceId: args.serviceId,
+      patientSnapshot,
     },
   });
 
@@ -48,6 +66,13 @@ export async function bookAppointment(args: {
   notifyProfessional(clinic.id, professional.id, appt.id).catch(() => {});
   notifyClient(clinic.id, client.id, appt.id, 'CONFIRMED').catch(() => {});
 
+  notifyScheduleEvent(clinic.id, 'created', {
+    patientName: client.name ?? client.phone,
+    serviceName: service?.name ?? 'Consulta',
+    dateTime: appt.dateTime.toLocaleString('pt-BR', { timeZone: clinic.timezone }),
+    source: args.source === 'AGENT' ? 'agent' : 'manual',
+  }).catch(() => {});
+
   return appt;
 }
 
@@ -68,11 +93,22 @@ export async function cancelAppointment(clinicId: string, appointmentId: string,
 
   const updated = await prisma.appointment.update({
     where: { id: appt.id },
-    data: { status: 'CANCELLED', notes: reason ? `${appt.notes ?? ''}\nCancelado: ${reason}` : appt.notes },
+    data: {
+      status: 'CANCELLED',
+      cancelledReason: reason,
+      notes: reason ? `${appt.notes ?? ''}\nCancelado: ${reason}`.trim() : appt.notes,
+    },
   });
 
   notifyClient(clinicId, appt.clientId, appt.id, 'CANCELLED').catch(() => {});
   notifyProfessional(clinicId, appt.professionalId, appt.id, 'CANCELLED').catch(() => {});
+
+  notifyScheduleEvent(clinicId, 'cancelled', {
+    patientName: appt.client.name ?? appt.client.phone,
+    serviceName: 'Consulta',
+    dateTime: appt.dateTime.toLocaleString('pt-BR', { timeZone: appt.clinic.timezone }),
+    reason,
+  }).catch(() => {});
 
   return updated;
 }
@@ -104,6 +140,13 @@ export async function rescheduleAppointment(
 
   return prisma.appointment.update({
     where: { id: appt.id },
-    data: { dateTime: newDateTime, duration, status: 'CONFIRMED', reminderSent: false },
+    data: {
+      dateTime: newDateTime,
+      endsAt: addMinutes(newDateTime, duration),
+      duration,
+      status: 'CONFIRMED',
+      reminderSent: false,
+      hourReminderSent: false,
+    },
   });
 }
